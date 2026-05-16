@@ -1,0 +1,40 @@
+[Unit]
+Description=claude-executor (formerly manademia) issue consumer queue runner (= 全 milestone 横断、priority 順に Sonnet で消化)
+Documentation=https://github.com/mister-X-is-your-father/manademia/blob/main/runbooks/issue-consumer.md
+After=network-online.target
+StartLimitBurst=5
+StartLimitIntervalSec=120
+
+[Service]
+Type=simple
+WorkingDirectory=/home/neo/manademia
+
+# PATH に pnpm / node / gh を含める。manademia-prod.service と同様、
+# dev マシンと VPS で同じ unit を使うため複数 path を並べる。
+Environment=PATH=/home/neo/.local/bin:/home/neo/.nvm/versions/node/v22.20.0/bin:/usr/local/bin:/usr/bin:/bin
+
+# .env.local は claude / gh の API key を含む可能性があるため明示 load。
+# 本番 VPS では別途 /etc/manademia/env.production が effective だが、queue runner は
+# 基本的に dev マシン (leo) でのみ動かす想定 (= production deploy には無関係)。
+EnvironmentFile=-/home/neo/manademia/.env.local
+
+# 起動コマンド: --watch で全 issue 消化、milestone filter 無しで全 milestone 横断。
+# priority 順 (critical → high → medium) + milestone 順 (MVP → 1ヶ月 → 3ヶ月 → ...) で
+# issue-queue-run.sh が自動 sort する。Long-term / legal / consumer-skip / priority/low
+# は triage で自動 skip。
+# 全消化 → exit すると Restart=always が再起動、新規 issue を検出して再消化サイクル。
+# 過剰な再起動を防ぐため StartLimitBurst で 2 分以内 5 回までに制限。
+ExecStart=/usr/bin/bash /home/neo/manademia/claude-executor/bin/queue-run.sh --watch
+
+# Restart 方針:
+#   - on-failure: crash / kill 時に再起動
+#   - on-success: 全消化 exit 後も再起動 (新規 issue 検出 loop の役割)
+# RestartSec 60s で過剰 polling 抑制
+Restart=always
+RestartSec=60
+
+StandardOutput=append:/home/neo/manademia/logs/issue-queue-watch.log
+StandardError=append:/home/neo/manademia/logs/issue-queue-watch.log
+
+[Install]
+WantedBy=default.target

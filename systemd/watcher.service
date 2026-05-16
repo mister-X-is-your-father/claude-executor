@@ -1,0 +1,29 @@
+[Unit]
+Description=claude-executor (formerly manademia) merge-when-green watcher (= PR auto-merge + conflict-doctor 発火)
+Documentation=https://github.com/mister-X-is-your-father/manademia/blob/main/claude-executor/bin/watcher.sh
+After=network-online.target
+StartLimitBurst=5
+StartLimitIntervalSec=120
+
+[Service]
+Type=simple
+WorkingDirectory=/home/neo/manademia
+
+# PATH に pnpm / node / gh / git を含める (= queue-runner.service と同じ規約)
+Environment=PATH=/home/neo/.local/bin:/home/neo/.nvm/versions/node/v22.20.0/bin:/usr/local/bin:/usr/bin:/bin
+
+EnvironmentFile=-/home/neo/manademia/.env.local
+
+# --watch で 60s 間隔の polling loop。CONFLICTING 検出時は conflict-doctor を
+# 別 process で spawn する (= watcher 自身は block しない)。
+ExecStart=/usr/bin/bash /home/neo/manademia/claude-executor/bin/watcher.sh --watch
+
+# Restart 方針: crash 時は即再起動、graceful exit は無いので Restart=always
+Restart=always
+RestartSec=30
+
+StandardOutput=append:/home/neo/manademia/logs/merge-watcher.log
+StandardError=append:/home/neo/manademia/logs/merge-watcher.log
+
+[Install]
+WantedBy=default.target
