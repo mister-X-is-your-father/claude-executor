@@ -20,12 +20,13 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
+PROJECT="${EXECUTOR_PROJECT_NAME:-manademia}"
 OUT="$REPO/logs/test-dup-audit.md"
 LOG_FILE="$REPO/logs/test-dup-audit-$(date +%Y%m%d-%H%M%S).log"
 MODEL="${TEST_DUP_AUDIT_MODEL:-claude-haiku-4-5-20251001}"
 TIMEOUT_SEC="${TEST_DUP_AUDIT_TIMEOUT_SEC:-600}"
 MIN_COUNT="${TEST_DUP_AUDIT_MIN_COUNT:-2}"
-LOCKFILE="/tmp/manademia-test-dup-audit.lock"
+LOCKFILE="/tmp/${PROJECT}-test-dup-audit.lock"
 
 mkdir -p "$REPO/logs"
 log() { echo "[$(date +%H:%M:%S)] $*" | tee -a "$LOG_FILE"; }
@@ -45,8 +46,8 @@ trap 'rm -f "$LOCKFILE" "$DUP_DATA_FILE" "$DETAILS_FILE" 2>/dev/null' EXIT
 # === Step 1: test name 抽出 + 重複 grouping ===
 log "Step 1: scanning test files for duplicate test names..."
 
-DUP_DATA_FILE="/tmp/manademia-test-dup-data.txt"
-DETAILS_FILE="/tmp/manademia-test-dup-details.txt"
+DUP_DATA_FILE="/tmp/${PROJECT}-test-dup-data.txt"
+DETAILS_FILE="/tmp/${PROJECT}-test-dup-details.txt"
 : > "$DUP_DATA_FILE"
 : > "$DETAILS_FILE"
 

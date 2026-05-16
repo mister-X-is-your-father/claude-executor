@@ -13,11 +13,11 @@
 #   2. triage: 法務 / Long-term / priority/low / 既に in-flight PR ある → skip
 #   3. label / body から「kind」判定 (docs-trivial / docs-detailed / impl / complex)
 #   4. kind に応じて model 選定 (Haiku / Sonnet / Opus)
-#   5. lockfile (/tmp/manademia-issue-consumer.lock) で並列禁止 (1 体まで)
-#   6. fresh worktree 作成 (= /tmp/manademia-issue-N/)
+#   5. lockfile (/tmp/${PROJECT}-issue-consumer.lock) で並列禁止 (1 体まで)
+#   6. fresh worktree 作成 (= /tmp/${PROJECT}-issue-N/)
 #   7. claude --print で end-to-end (Sonnet が PR 作成 + push まで)
 #   8. rule-based verify: docs-only diff なら build skip、code touch なら pnpm build 必須
-#   9. status file (/tmp/manademia-issue-consumer-<N>.status) に OK / FAILED 記録
+#   9. status file (/tmp/${PROJECT}-issue-consumer-<N>.status) に OK / FAILED 記録
 #
 # 安全規則:
 #   - 同時 1 体まで (global lockfile)
@@ -35,8 +35,9 @@ if [[ -z "$ISSUE_NUM" || ! "$ISSUE_NUM" =~ ^[0-9]+$ ]]; then
 fi
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-GLOBAL_LOCKFILE="/tmp/manademia-issue-consumer.lock"
-STATUS_FILE="/tmp/manademia-issue-consumer-${ISSUE_NUM}.status"
+PROJECT="${EXECUTOR_PROJECT_NAME:-manademia}"
+GLOBAL_LOCKFILE="/tmp/${PROJECT}-issue-consumer.lock"
+STATUS_FILE="/tmp/${PROJECT}-issue-consumer-${ISSUE_NUM}.status"
 LOG_DIR="$REPO/logs"
 LOG_FILE="$LOG_DIR/issue-consumer-${ISSUE_NUM}-$(date +%Y%m%d-%H%M%S).log"
 TIMEOUT_SEC="${ISSUE_CONSUMER_TIMEOUT_SEC:-2400}"   # 40 min default
@@ -103,16 +104,34 @@ log "issue #$ISSUE_NUM: $TITLE"
 log "  labels: $LABELS"
 log "  milestone: $MILESTONE"
 
-# === Triage: skip 条件 ===
+# === Triage: skip 条件 (env でカスタマイズ可) ===
+# EXECUTOR_SKIP_LABELS: comma-separated label list (default = manademia 互換)
+# EXECUTOR_SKIP_MILESTONES: comma-separated milestone title list
+EXECUTOR_SKIP_LABELS="${EXECUTOR_SKIP_LABELS:-area/legal,priority/low,consumer-skip}"
+EXECUTOR_SKIP_MILESTONES="${EXECUTOR_SKIP_MILESTONES:-Long-term (Phase 11+)}"
+
 SKIP_REASON=""
-if [[ "$LABELS" == *"area/legal"* ]]; then
-  SKIP_REASON="area/legal (法務 review 要)"
-elif [[ "$MILESTONE" == "Long-term (Phase 11+)" ]]; then
-  SKIP_REASON="Long-term (Phase 11+)"
-elif [[ "$LABELS" == *"priority/low"* ]]; then
-  SKIP_REASON="priority/low (deferred)"
-elif [[ "$LABELS" == *"consumer-skip"* ]]; then
-  SKIP_REASON="consumer-skip (手動指定)"
+# label match (= 部分一致でなく単語一致でも安全に label 文字列内に含まれるか)
+IFS=',' read -ra _SKIP_LABEL_ARR <<< "$EXECUTOR_SKIP_LABELS"
+for _sl in "${_SKIP_LABEL_ARR[@]}"; do
+  _sl_trim="$(echo "$_sl" | sed 's/^ *//;s/ *$//')"
+  [[ -z "$_sl_trim" ]] && continue
+  if [[ "$LABELS" == *"$_sl_trim"* ]]; then
+    SKIP_REASON="$_sl_trim (env: EXECUTOR_SKIP_LABELS)"
+    break
+  fi
+done
+# milestone match (= 完全一致)
+if [[ -z "$SKIP_REASON" ]]; then
+  IFS=',' read -ra _SKIP_MS_ARR <<< "$EXECUTOR_SKIP_MILESTONES"
+  for _sm in "${_SKIP_MS_ARR[@]}"; do
+    _sm_trim="$(echo "$_sm" | sed 's/^ *//;s/ *$//')"
+    [[ -z "$_sm_trim" ]] && continue
+    if [[ "$MILESTONE" == "$_sm_trim" ]]; then
+      SKIP_REASON="milestone:$_sm_trim (env: EXECUTOR_SKIP_MILESTONES)"
+      break
+    fi
+  done
 fi
 
 if [[ -n "$SKIP_REASON" ]]; then
@@ -154,7 +173,7 @@ FALLBACK_MODEL="${ISSUE_CONSUMER_MODEL_FALLBACK:-claude-opus-4-7}"
 log "  kind: $KIND, model: $MODEL"
 
 # === Worktree 作成 ===
-WORKTREE_DIR="/tmp/manademia-issue-${ISSUE_NUM}"
+WORKTREE_DIR="/tmp/${PROJECT}-issue-${ISSUE_NUM}"
 BRANCH_NAME="issue/${ISSUE_NUM}"
 
 # 既存 cleanup
@@ -178,7 +197,7 @@ log "  branch: $BRANCH_NAME"
 ISSUE_BODY="$(echo "$ISSUE_JSON" | python3 -c 'import json,sys;print(json.load(sys.stdin).get("body",""))')"
 
 PROMPT_BODY=$(cat <<EOF
-あなたは manademia リポジトリの issue 自動消化 sub-agent です。
+あなたは ${PROJECT} リポジトリの issue 自動消化 sub-agent です。
 GitHub issue #${ISSUE_NUM} を end-to-end で解決し、PR を作成してください。
 
 ## 作業ディレクトリ
@@ -206,7 +225,7 @@ ${ISSUE_BODY}
 5. commit (message: \`<scope>(<area>): <description> (#${ISSUE_NUM})\` + Co-Authored-By)
 6. \`git push -u origin ${BRANCH_NAME}\`
 7. \`gh pr create --head ${BRANCH_NAME} --base main\` で PR 作成、body に \`Closes #${ISSUE_NUM}\` を含める
-8. \`/tmp/manademia-issue-consumer-${ISSUE_NUM}.status\` に \`OK:PR#<N>\` を 1 行で書いて exit
+8. \`/tmp/${PROJECT}-issue-consumer-${ISSUE_NUM}.status\` に \`OK:PR#<N>\` を 1 行で書いて exit
 
 ## 禁止 / 制約
 

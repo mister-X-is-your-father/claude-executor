@@ -12,6 +12,7 @@ WorkingDirectory=/home/neo/manademia
 # PATH に pnpm / node / gh を含める。manademia-prod.service と同様、
 # dev マシンと VPS で同じ unit を使うため複数 path を並べる。
 Environment=PATH=/home/neo/.local/bin:/home/neo/.nvm/versions/node/v22.20.0/bin:/usr/local/bin:/usr/bin:/bin
+Environment=EXECUTOR_PROJECT_NAME=manademia
 
 # .env.local は claude / gh の API key を含む可能性があるため明示 load。
 # 本番 VPS では別途 /etc/manademia/env.production が effective だが、queue runner は

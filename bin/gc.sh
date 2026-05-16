@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
 # claude-executor/bin/gc.sh
 #
-# 古い issue-consumer worktree (`/tmp/manademia-issue-N/`) と issue branch
+# 古い issue-consumer worktree (`/tmp/${PROJECT}-issue-N/`) と issue branch
 # (`issue/N`) を garbage collect する。
 #
 # 動作:
-#   1. /tmp/manademia-issue-*/ を列挙
+#   1. /tmp/${PROJECT}-issue-*/ を列挙
 #   2. 各 worktree について:
 #      - PR が merged or closed なら worktree 削除 + branch 削除
 #      - PR が open + 24h 以上経過 + lockfile 不在 (= consumer 終了済) なら残す
 #      - PR が無い (= consumer 失敗) + 24h 以上経過なら強制削除 (= rescue 不能)
-#   3. /tmp/manademia-issue-consumer-*.status の古い file も clean (= 7 日経過で削除)
+#   3. /tmp/${PROJECT}-issue-consumer-*.status の古い file も clean (= 7 日経過で削除)
 #
 # Usage:
 #   claude-executor/bin/gc.sh                # 1 回実行
@@ -22,6 +22,7 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
+PROJECT="${EXECUTOR_PROJECT_NAME:-manademia}"
 DRY_RUN=0
 [[ "${1:-}" == "--dry-run" ]] && DRY_RUN=1
 
@@ -30,7 +31,7 @@ log() { echo "[$(date +%H:%M:%S)] $*"; }
 # === 1. worktree GC ===
 removed=0
 kept=0
-for wt in /tmp/manademia-issue-*/; do
+for wt in /tmp/${PROJECT}-issue-*/; do
   [[ -d "$wt" ]] || continue
   issue_num="$(basename "$wt" | sed 's/manademia-issue-//')"
   [[ ! "$issue_num" =~ ^[0-9]+$ ]] && continue
@@ -53,7 +54,7 @@ else:
   IFS='|' read -r STATE PR_NUM CREATED <<< "$pr_state"
 
   # lockfile check (= 現在 consumer 走行中なら触らない)
-  LOCK="/tmp/manademia-issue-consumer.lock"
+  LOCK="/tmp/${PROJECT}-issue-consumer.lock"
   if [[ -f "$LOCK" ]]; then
     LOCK_PID="$(cat "$LOCK" 2>/dev/null || echo '')"
     if [[ -n "$LOCK_PID" ]] && kill -0 "$LOCK_PID" 2>/dev/null; then
@@ -110,7 +111,7 @@ done
 
 # === 2. status file GC (7 日以上前) ===
 status_removed=0
-for sf in /tmp/manademia-issue-consumer-*.status; do
+for sf in /tmp/${PROJECT}-issue-consumer-*.status; do
   [[ -f "$sf" ]] || continue
   age=$(( $(date +%s) - $(stat -c %Y "$sf") ))
   if [[ "$age" -gt 604800 ]]; then  # 7 days

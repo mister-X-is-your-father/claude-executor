@@ -15,6 +15,7 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
+PROJECT="${EXECUTOR_PROJECT_NAME:-manademia}"
 STATS_FILE="$REPO/logs/consumer-stats.jsonl"
 
 SINCE=""

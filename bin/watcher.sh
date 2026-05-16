@@ -118,8 +118,8 @@ print(len(pending))')"
     echo "  PR #$PR ($TITLE): $CHECKS_FAIL CI check(s) failing, skip"
     # ci-doctor.sh を nohup spawn して自動修復試行 (conflict-doctor と同パターン)。
     if [[ -x "$REPO_ROOT/claude-executor/bin/ci-doctor.sh" ]]; then
-      DOC_LOCK="/tmp/manademia-ci-doctor-pr-${PR}.lock"
-      DOC_STATUS_FILE="/tmp/manademia-ci-doctor-pr-${PR}.status"
+      DOC_LOCK="/tmp/${PROJECT}-ci-doctor-pr-${PR}.lock"
+      DOC_STATUS_FILE="/tmp/${PROJECT}-ci-doctor-pr-${PR}.status"
       DOC_RUNNING=0
       if [[ -f "$DOC_LOCK" ]]; then
         DOC_PID="$(cat "$DOC_LOCK" 2>/dev/null || echo '')"
@@ -159,8 +159,8 @@ print(len(pending))')"
     # 書かれてる PR は cooldown (2 時間) を入れて再起動を抑止する。
     if [[ "$MERGEABLE" == "CONFLICTING" ]] \
        && [[ -x "$REPO_ROOT/claude-executor/bin/conflict-doctor.sh" ]]; then
-      DOC_LOCK="/tmp/manademia-conflict-doctor-pr-${PR}.lock"
-      DOC_STATUS_FILE="/tmp/manademia-conflict-doctor-pr-${PR}.status"
+      DOC_LOCK="/tmp/${PROJECT}-conflict-doctor-pr-${PR}.lock"
+      DOC_STATUS_FILE="/tmp/${PROJECT}-conflict-doctor-pr-${PR}.status"
       DOC_RUNNING=0
       if [[ -f "$DOC_LOCK" ]]; then
         DOC_PID="$(cat "$DOC_LOCK" 2>/dev/null || echo '')"

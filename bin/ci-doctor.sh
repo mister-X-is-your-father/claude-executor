@@ -10,7 +10,7 @@
 #
 # 動作:
 #   1. PR の branch / worktree を特定
-#   2. lockfile (/tmp/manademia-ci-doctor-pr-<N>.lock) で多重起動防止
+#   2. lockfile (/tmp/${PROJECT}-ci-doctor-pr-<N>.lock) で多重起動防止
 #   3. 該当 worktree で gh pr checks <N> --json で fail check 取得
 #   4. Claude を `--print` で起動。prompt で:
 #      - failed CI logs を gh run view で取得
@@ -36,8 +36,9 @@ if [[ -z "$PR_NUM" || ! "$PR_NUM" =~ ^[0-9]+$ ]]; then
 fi
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-LOCKFILE="/tmp/manademia-ci-doctor-pr-${PR_NUM}.lock"
-STATUS_FILE="/tmp/manademia-ci-doctor-pr-${PR_NUM}.status"
+PROJECT="${EXECUTOR_PROJECT_NAME:-manademia}"
+LOCKFILE="/tmp/${PROJECT}-ci-doctor-pr-${PR_NUM}.lock"
+STATUS_FILE="/tmp/${PROJECT}-ci-doctor-pr-${PR_NUM}.status"
 LOG_DIR="$REPO/logs"
 LOG_FILE="$LOG_DIR/ci-doctor-pr-${PR_NUM}-$(date +%Y%m%d-%H%M%S).log"
 TIMEOUT_SEC="${CI_DOCTOR_TIMEOUT_SEC:-1800}"
@@ -109,7 +110,7 @@ if [[ -z "$WORKTREE_DIR" || ! -d "$WORKTREE_DIR" ]]; then
   # 主目的: 私が手動で push した PR、consumer 完了後に worktree GC された PR、
   # 別 host で作業した PR 等を、ci-doctor 単独で resolve 可能にする。
   echo "[$(date +%H:%M:%S)] no existing worktree for '$BRANCH', creating ephemeral worktree..." | tee -a "$LOG_FILE"
-  WORKTREE_DIR="/tmp/manademia-ci-doctor-wt-pr-${PR_NUM}"
+  WORKTREE_DIR="/tmp/${PROJECT}-ci-doctor-wt-pr-${PR_NUM}"
   if [[ -d "$WORKTREE_DIR" ]]; then
     git -C "$REPO" worktree remove --force "$WORKTREE_DIR" 2>/dev/null || true
     rm -rf "$WORKTREE_DIR"
@@ -130,7 +131,7 @@ fi
 echo "  worktree  : $WORKTREE_DIR (ephemeral=$WORKTREE_CREATED)" | tee -a "$LOG_FILE"
 
 PROMPT_BODY=$(cat <<EOF
-あなたは manademia リポジトリの CI fail 自動修復 sub-agent です。
+あなたは ${PROJECT} リポジトリの CI fail 自動修復 sub-agent です。
 PR #${PR_NUM} (branch: ${BRANCH}) の CI を green にしてください。
 
 ## 作業ディレクトリ
@@ -152,7 +153,7 @@ ${WORKTREE_DIR} (直接 cd して作業、他 worktree / main worktree は触ら
 5. 修正 commit (message: \`fix(ci): <pattern> — <short description>\`)
 6. \`pnpm verify\` でローカル green 確認
 7. \`git push\` (該当 branch のみ)
-8. \`/tmp/manademia-ci-doctor-pr-${PR_NUM}.status\` に \`OK\` を書いて exit
+8. \`/tmp/${PROJECT}-ci-doctor-pr-${PR_NUM}.status\` に \`OK\` を書いて exit
 9. push 後 GitHub Actions の再走を待つのは scripts の役目ではない (watcher が次周で確認)
 
 ## 禁止

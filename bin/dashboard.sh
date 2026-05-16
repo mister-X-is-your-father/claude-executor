@@ -11,8 +11,9 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
+PROJECT="${EXECUTOR_PROJECT_NAME:-manademia}"
 STATS_FILE="$REPO/logs/consumer-stats.jsonl"
-GLOBAL_LOCK="/tmp/manademia-issue-consumer.lock"
+GLOBAL_LOCK="/tmp/${PROJECT}-issue-consumer.lock"
 QUEUE_LOG="$REPO/logs/issue-queue-watch.log"
 
 WATCH=0

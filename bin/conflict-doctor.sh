@@ -9,13 +9,13 @@
 #
 # 動作:
 #   1. PR の branch / worktree を特定
-#   2. lockfile (/tmp/manademia-conflict-doctor-pr-<N>.lock) で多重起動防止
+#   2. lockfile (/tmp/${PROJECT}-conflict-doctor-pr-<N>.lock) で多重起動防止
 #   3. 該当 worktree で `git fetch origin main` + `git merge origin/main --no-edit` 試行
 #      既に merge 中なら state そのまま続行
 #   4. Claude を `--dangerously-skip-permissions --print` で起動
 #      prompt で conflict marker 除去 + 両 branch の意図を保つ resolve を指示
 #   5. Claude 完了後 `pnpm typecheck` で構文確認 → 通れば `git push`
-#   6. status file (/tmp/manademia-conflict-doctor-pr-<N>.status) に結果記録
+#   6. status file (/tmp/${PROJECT}-conflict-doctor-pr-<N>.status) に結果記録
 #      - OK             解決 + push 成功 (next loop で merge-when-green が pickup)
 #      - FAILED:<phase>  自動解決失敗 (user 介入が必要)
 #
@@ -34,8 +34,9 @@ if [[ -z "$PR_NUM" || ! "$PR_NUM" =~ ^[0-9]+$ ]]; then
 fi
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-LOCKFILE="/tmp/manademia-conflict-doctor-pr-${PR_NUM}.lock"
-STATUS_FILE="/tmp/manademia-conflict-doctor-pr-${PR_NUM}.status"
+PROJECT="${EXECUTOR_PROJECT_NAME:-manademia}"
+LOCKFILE="/tmp/${PROJECT}-conflict-doctor-pr-${PR_NUM}.lock"
+STATUS_FILE="/tmp/${PROJECT}-conflict-doctor-pr-${PR_NUM}.status"
 LOG_DIR="$REPO/logs"
 LOG_FILE="$LOG_DIR/conflict-doctor-pr-${PR_NUM}-$(date +%Y%m%d-%H%M%S).log"
 TIMEOUT_SEC="${CONFLICT_DOCTOR_TIMEOUT_SEC:-1800}"
@@ -104,7 +105,7 @@ if [[ -z "$WORKTREE_DIR" || ! -d "$WORKTREE_DIR" ]]; then
   # 主目的: consumer 経由で作成された PR (= worktree 残ってない)、PR 著者が
   # 手動 push した PR、別 host で作業した PR 等を、自動で resolve 可能にする。
   echo "[$(date +%H:%M:%S)] no existing worktree for '$BRANCH', creating ephemeral worktree..." | tee -a "$LOG_FILE"
-  WORKTREE_DIR="/tmp/manademia-conflict-doctor-wt-pr-${PR_NUM}"
+  WORKTREE_DIR="/tmp/${PROJECT}-conflict-doctor-wt-pr-${PR_NUM}"
   if [[ -d "$WORKTREE_DIR" ]]; then
     # 前回 run の残骸を強制掃除
     git -C "$REPO" worktree remove --force "$WORKTREE_DIR" 2>/dev/null || true
@@ -128,7 +129,7 @@ fi
 echo "  worktree  : $WORKTREE_DIR (ephemeral=$WORKTREE_CREATED)" | tee -a "$LOG_FILE"
 
 PROMPT_BODY=$(cat <<EOF
-あなたは manademia リポジトリの merge conflict 自動解決 sub-agent です。
+あなたは ${PROJECT} リポジトリの merge conflict 自動解決 sub-agent です。
 PR #${PR_NUM} (branch: ${BRANCH}) を origin/main に対して merge できる状態に修正してください。
 
 ## 作業ディレクトリ
@@ -143,13 +144,13 @@ ${WORKTREE_DIR} (直接 cd して作業すること、他 worktree / main worktr
 4. 各 conflict ファイルを Read で開き、\`<<<<<<< HEAD\` / \`=======\` / \`>>>>>>> origin/main\` マーカーを除去:
    - **両 branch が独立に追加した内容** (additive): 両方を保つ (例: schema.ts に table 定義を片側ずつ append)
    - **同じ箇所を異なる方法で修正** (semantic): 両 branch の意図を統合する (片方を捨てない、user 確認できないので最善努力)
-   - **不明瞭で危険** (1 行レベルの相反するロジック書き換え等): /tmp/manademia-conflict-doctor-pr-${PR_NUM}.status に \`FAILED:unresolvable:<reason>\` を書いて exit
+   - **不明瞭で危険** (1 行レベルの相反するロジック書き換え等): /tmp/${PROJECT}-conflict-doctor-pr-${PR_NUM}.status に \`FAILED:unresolvable:<reason>\` を書いて exit
 5. \`git add <resolved-files>\` で stage
 6. \`pnpm typecheck\` で構文 OK 確認 (失敗したら最大 2 回まで自分で修正試行、それでも fail なら FAILED:typecheck)
 7. \`pnpm lint\` でも確認 (warnings は許容、errors のみ fail 扱い)
 8. \`git commit\` (default merge commit message で OK、追加で 1 行 \"resolved by conflict-doctor sub-agent\" を本文に)
 9. \`git push\` (該当 branch のみ、main は決して push しない)
-10. \`/tmp/manademia-conflict-doctor-pr-${PR_NUM}.status\` に \`OK\` を書いて exit
+10. \`/tmp/${PROJECT}-conflict-doctor-pr-${PR_NUM}.status\` に \`OK\` を書いて exit
 
 ## 禁止
 - conflict marker (<<<, ===, >>>) を残したまま commit

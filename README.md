@@ -69,6 +69,31 @@ bash claude-executor/bin/install-watcher.sh
 - claude CLI (= Anthropic API access)
 - (optional) systemd (= 常駐化、Linux user service)
 
+## 環境変数 (= 一般化、プロジェクトごとに override 可)
+
+| 変数 | デフォルト | 説明 |
+|---|---|---|
+| `EXECUTOR_PROJECT_NAME` | `manademia` | lockfile / worktree path / prompt 内のプロジェクト名 |
+| `EXECUTOR_SKIP_LABELS` | `area/legal,priority/low,consumer-skip` | comma 区切り、これらの label を持つ issue は skip |
+| `EXECUTOR_SKIP_MILESTONES` | `Long-term (Phase 11+)` | comma 区切り、これらの milestone は skip |
+| `EXECUTOR_PRIORITY_ORDER` | `priority/critical:0,priority/high:1,priority/medium:2,priority/low:3` | sort key、若い数字優先 |
+| `EXECUTOR_MILESTONE_ORDER` | `MVP 本番リリース:0,本番後 1 ヶ月 (Quick wins):1,...` | sort key、若い数字優先 |
+| `ISSUE_CONSUMER_MODEL_TRIVIAL` | `claude-haiku-4-5-20251001` | docs-trivial 用 model |
+| `ISSUE_CONSUMER_MODEL_DETAILED` | `claude-sonnet-4-6` | docs-detailed 用 model |
+| `ISSUE_CONSUMER_MODEL_IMPL` | `claude-sonnet-4-6` | impl 用 default model |
+| `ISSUE_CONSUMER_MODEL_COMPLEX` | `claude-opus-4-7` | complex 用 model |
+| `ISSUE_CONSUMER_MODEL_FALLBACK` | `claude-opus-4-7` | rate-limit / overload 検出時の fallback |
+| `ISSUE_CONSUMER_TIMEOUT_SEC` | `2400` | 1 issue の処理 timeout (秒) |
+
+systemd unit で常駐させる場合は `Environment=EXECUTOR_PROJECT_NAME=yourname` 等で渡す。
+ad-hoc 起動なら env で前置:
+
+```bash
+EXECUTOR_PROJECT_NAME=myproj \
+  EXECUTOR_SKIP_LABELS=wontfix,spam \
+  bash claude-executor/bin/queue-run.sh --watch
+```
+
 ## triage ルール (= 自動 skip 条件)
 
 consumer が処理しない issue:

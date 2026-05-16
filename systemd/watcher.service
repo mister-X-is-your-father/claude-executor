@@ -11,6 +11,7 @@ WorkingDirectory=/home/neo/manademia
 
 # PATH に pnpm / node / gh / git を含める (= queue-runner.service と同じ規約)
 Environment=PATH=/home/neo/.local/bin:/home/neo/.nvm/versions/node/v22.20.0/bin:/usr/local/bin:/usr/bin:/bin
+Environment=EXECUTOR_PROJECT_NAME=manademia
 
 EnvironmentFile=-/home/neo/manademia/.env.local
 
